@@ -13,12 +13,14 @@ all read from.
 | Crate | What it holds | Dependencies |
 | --- | --- | --- |
 | [`kotor-ncs-isa`](crates/kotor-ncs-isa) | The NCS bytecode instruction set, as data | none |
+| [`kotor-ncs`](crates/kotor-ncs) | NCS reader/writer and DeNCS-algorithm decompiler | `kotor-ncs-isa` |
 | [`kotor-formats`](crates/kotor-formats) | GFF, 2DA, TLK, SSF, ERF/RIM readers and writers | none |
 | [`kotor-diff`](crates/kotor-diff) | Compares two files and says what changed | `kotor-formats` |
 
-They are split so a consumer takes only what it needs. A script compiler needs
-the instruction set and nothing else — no GFF parser, no 2DA parser. A patcher
-needs the formats and not the bytecode. Neither has to depend on the other.
+They are split so a consumer takes only what it needs. A script compiler can
+take the instruction set alone, or `kotor-ncs` when it also needs to read
+bytecode and decompile it. A patcher takes the structured formats and not the
+bytecode. Neither side has to depend on the other.
 
 `kotor-diff` answers one question from two ends. A query tool compares resources
 structurally and can patch and merge them; an instruction-file editor needs the

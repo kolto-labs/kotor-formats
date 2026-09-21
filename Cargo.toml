@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/kotor-ncs-isa",
+    "crates/kotor-ncs",
     "crates/kotor-formats",
     "crates/kotor-diff",
 ]
@@ -15,6 +16,7 @@ repository = "https://github.com/holowan-biolabs/kotor-formats"
 
 [workspace.dependencies]
 kotor-ncs-isa = { path = "crates/kotor-ncs-isa" }
+kotor-ncs = { path = "crates/kotor-ncs" }
 kotor-formats = { path = "crates/kotor-formats" }
 
 [profile.release]

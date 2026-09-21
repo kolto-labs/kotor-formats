@@ -1,0 +1,12 @@
+[package]
+name = "kotor-ncs"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+description = "NCS bytecode reader, writer, and DeNCS-algorithm decompiler."
+
+[dependencies]
+kotor-ncs-isa = { workspace = true }
