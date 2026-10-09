@@ -12,7 +12,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.77"
 license = "MIT"
-repository = "https://github.com/holowan-biolabs/kotor-formats"
+repository = "https://github.com/kolto-labs/kotor-formats"
 
 [workspace.dependencies]
 kotor-ncs-isa = { path = "crates/kotor-ncs-isa" }

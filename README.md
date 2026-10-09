@@ -40,8 +40,8 @@ release. `vX.Y.Z` is the one to prefer; the per-crate tags name the same commits
 and exist so each changelog has somewhere to point.
 
 ```toml
-kotor-formats = { git = "https://github.com/holowan-biolabs/kotor-formats", tag = "v0.1.0" }
-kotor-diff = { git = "https://github.com/holowan-biolabs/kotor-formats", tag = "v0.1.0" }
+kotor-formats = { git = "https://github.com/kolto-labs/kotor-formats", tag = "v0.1.0" }
+kotor-diff = { git = "https://github.com/kolto-labs/kotor-formats", tag = "v0.1.0" }
 ```
 
 The crates keep their own version numbers, which do not have to match — what
