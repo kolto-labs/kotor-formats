@@ -57,6 +57,9 @@ struct Builder<'a> {
     pending_deferred: Vec<Expr>,
     /// Forward `JMP` to this index inside a switch case is `break`.
     break_target: Option<usize>,
+    /// Stack slots this sub's parameters take. They sit under its locals and
+    /// are not modelled on `stack`; the closing `MOVSP` pops them too.
+    param_slots: usize,
 }
 
 enum LoopKind {
@@ -91,6 +94,7 @@ pub fn build_sub(
         suppress_next_copy: false,
         pending_deferred: Vec::new(),
         break_target: None,
+        param_slots: sub.param_count,
     };
     let block = builder.build_range(sub.range.start, sub.range.end)?;
     Ok((block, builder.vars, builder.structs))
@@ -385,13 +389,21 @@ impl Builder<'_> {
         let dest = self.stack.len() - loc;
         let lhs = self.stack[dest].clone();
         if let Value::Local(id) = lhs {
-            if let Some(Stmt::VarDecl { var, init, .. }) =
-                block.stmts.iter_mut().rev().find(
-                    |stmt| matches!(stmt, Stmt::VarDecl { var, init: None, .. } if *var == id),
-                )
-            {
-                if *var == id {
-                    *init = Some(rhs);
+            // Fold the assignment into the declaration only when nothing but
+            // other bare declarations ran in between. Otherwise an assignment
+            // after an `if` that already set the variable was hoisted into
+            // the declaration: `int nRandom = Random(nRandom);`.
+            let decl = block.stmts.iter().rposition(
+                |stmt| matches!(stmt, Stmt::VarDecl { var, init: None, .. } if *var == id),
+            );
+            if let Some(decl) = decl {
+                let only_bare_decls_after = block.stmts[decl + 1..]
+                    .iter()
+                    .all(|stmt| matches!(stmt, Stmt::VarDecl { init: None, .. }));
+                if only_bare_decls_after {
+                    if let Stmt::VarDecl { init, .. } = &mut block.stmts[decl] {
+                        *init = Some(rhs);
+                    }
                     return Ok(());
                 }
             }
@@ -423,10 +435,12 @@ impl Builder<'_> {
             return Err(self.unsupported(inst));
         }
         let count = stack_offset_to_pos(amount);
-        if count > self.stack.len() {
+        if count > self.stack.len() + self.param_slots {
             return Err(self.underflow(inst));
         }
-        let start = self.stack.len() - count;
+        // Popping past the modelled stack is the sub popping its parameters
+        // on the way out.
+        let start = self.stack.len().saturating_sub(count);
         let popped: Vec<Value> = self.stack.drain(start..).collect();
         for value in popped {
             if is_inc_expr(&value) {
@@ -537,13 +551,57 @@ impl Builder<'_> {
             SubId::User(n) => n,
             _ => return Err(self.unsupported(inst)),
         };
+        let (ret, ret_slots) = (info.ret, info.ret_slots);
         let call = Expr::CallSub { id: user, args };
-        if info.ret == Ty::Void {
+        if ret == Ty::Void {
             block.stmts.push(Stmt::Expr(call));
         } else {
+            if ret_slots == 1 {
+                self.take_return_slot(ret, block);
+            }
             self.stack.push(Value::Expr(call));
         }
         Ok(())
+    }
+
+    /// Drop the slot a non-void `JSR` returns its value in.
+    ///
+    /// The caller reserves that slot with `RSADDx` before it pushes the
+    /// arguments, and the callee writes its result there: `JSR` itself
+    /// pushes nothing. The `RSADDx` was read as a new local, so without
+    /// this the slot stays on the stack under the call. Every operator
+    /// after the call then pairs with the wrong value: `A && sub1() == 4`
+    /// came out as `int int1; return int1 && sub1() == 4;`, with `A` lost.
+    ///
+    /// The slot is only taken when it has the callee's return type and is
+    /// still an uninitialised declaration in this block with nothing but
+    /// other declarations after it, which is the shape the compiler's
+    /// `RSADDx; …args…; JSR` leaves. Anything else keeps the previous
+    /// reading rather than guessing.
+    fn take_return_slot(&mut self, ret: Ty, block: &mut Block) {
+        let Some(&Value::Local(slot)) = self.stack.last() else {
+            return;
+        };
+        if self.vars.get(&slot).map(|var| var.ty) != Some(ret) {
+            return;
+        }
+        let Some(decl) = block.stmts.iter().rposition(
+            |stmt| matches!(stmt, Stmt::VarDecl { var, init: None, .. } if *var == slot),
+        ) else {
+            return;
+        };
+        let only_decls_after = block.stmts[decl + 1..]
+            .iter()
+            .all(|stmt| matches!(stmt, Stmt::VarDecl { .. }));
+        let copied = self.stack[..self.stack.len() - 1]
+            .iter()
+            .any(|value| matches!(value, Value::Local(id) if *id == slot));
+        if !only_decls_after || copied {
+            return;
+        }
+        block.stmts.remove(decl);
+        self.vars.remove(&slot);
+        self.stack.pop();
     }
 
     fn binary(&mut self, inst: &Instruction, op: BinOp) -> Result<(), BuildError> {
@@ -602,10 +660,11 @@ impl Builder<'_> {
         if self.ins.get(i + 1).is_none_or(|j| j.op != "JMP") {
             return Err(self.unsupported(inst));
         }
-        let slots = stack_size_to_pos(arg_i32(inst, 1)?);
-        if slots > self.stack.len() {
-            return Err(self.underflow(inst));
-        }
+        // The saved size also counts what sits under this sub's locals (its
+        // parameters and return slot), which the builder does not model. The
+        // deferred body addresses the saved stack from the top, so seeding it
+        // with every modelled value is enough; a reach below them still fails.
+        let slots = stack_size_to_pos(arg_i32(inst, 1)?).min(self.stack.len());
         let seed = self.stack[self.stack.len() - slots..].to_vec();
         let saved_stack = std::mem::replace(&mut self.stack, seed);
         let saved_pending = std::mem::take(&mut self.pending_deferred);

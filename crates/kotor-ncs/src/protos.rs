@@ -58,6 +58,7 @@ pub fn infer_prototypes(
                     cfgs.get(&id),
                     &by_pos,
                     &infos,
+                    site_est.get(&id).copied().unwrap_or_default(),
                     game,
                     &mut warnings,
                 );
@@ -307,6 +308,7 @@ fn infer_one(
     cfg: Option<&Cfg>,
     by_pos: &HashMap<u32, SubId>,
     known: &HashMap<SubId, SubInfo>,
+    sites: CallSiteEstimate,
     game: Game,
     warnings: &mut Vec<Warning>,
 ) -> SubInfo {
@@ -390,7 +392,22 @@ fn infer_one(
         }
     }
 
-    finish_info(sub, &walk)
+    let mut info = finish_info(sub, &walk);
+    // Every reachable instruction was walked. A sub that never copies a value
+    // below its parameters has no return slot to fill, so it returns void.
+    // Leaving it unknown sent it to the call-site estimate, which counts the
+    // caller's live locals as a reserved slot and so called it `int`. The
+    // one call site that does settle it is `RSADDx` right before the `JSR`
+    // of a sub with no parameters; that case is left to the estimate.
+    let reserved_at_call = info.param_count == 0 && sites.rsadd_before_jsr;
+    if info.ret == Ty::Unknown
+        && !reserved_at_call
+        && !walk.below_cpdown.iter().any(|c| c.depth > info.param_count)
+    {
+        info.ret = Ty::Void;
+        info.ret_slots = 0;
+    }
+    info
 }
 
 fn apply(
@@ -692,6 +709,8 @@ fn finish_info(sub: &SubRange, walk: &Walk) -> SubInfo {
 struct CallSiteEstimate {
     max_growth: usize,
     calls: usize,
+    /// Some call site is `RSADDx` immediately followed by the `JSR`.
+    rsadd_before_jsr: bool,
 }
 
 fn call_site_estimates(
@@ -744,6 +763,9 @@ fn call_site_estimates(
                                 let entry = est.entry(callee).or_default();
                                 entry.max_growth = entry.max_growth.max(growth);
                                 entry.calls += 1;
+                                entry.rsadd_before_jsr |= i
+                                    .checked_sub(1)
+                                    .is_some_and(|p| ins[p].op.starts_with("RSADD"));
                             }
                         }
                         growth = 0;
