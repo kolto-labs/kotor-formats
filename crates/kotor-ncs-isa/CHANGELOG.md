@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/kolto-labs/kotor-formats/compare/kotor-ncs-isa-v0.1.0...kotor-ncs-isa-v0.2.0) (2026-10-09)
+
+
+### Bug Fixes
+
+* give each crate a literal version so release-please can bump it ([#2](https://github.com/kolto-labs/kotor-formats/issues/2)) ([79a6ca4](https://github.com/kolto-labs/kotor-formats/commit/79a6ca447e6585c57d63aff4cf5e26e30bc75cbe))
+* release the crates as one unit so a tag is usable ([#12](https://github.com/kolto-labs/kotor-formats/issues/12)) ([3b34906](https://github.com/kolto-labs/kotor-formats/commit/3b34906b6156b34e7d1898c4b298e85938daae7e))
+
 ## [0.2.2](https://github.com/kolto-labs/kotor-formats/compare/kotor-ncs-isa-v0.2.1...kotor-ncs-isa-v0.2.2) (2026-08-31)
 
 
