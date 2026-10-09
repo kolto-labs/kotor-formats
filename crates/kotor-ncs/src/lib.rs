@@ -1,4 +1,8 @@
 //! NCS → NSS decompiler (DeNCS algorithm port).
+//!
+//! The crate carries no engine function names. Build an [`ActionTable`] with
+//! [`ActionTable::from_nwscript`] from a `nwscript.nss` you have, and pass it to
+//! [`decompile`]. With an empty table the output keeps routine numbers.
 
 mod actions;
 mod ast;
