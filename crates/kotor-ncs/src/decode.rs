@@ -13,7 +13,6 @@
 
 use kotor_ncs_isa::Operands;
 
-use crate::actions;
 
 const HEADER_SIZE: usize = 13;
 const MAGIC: u8 = 0x42;
@@ -26,7 +25,7 @@ pub struct Instruction {
     pub args: Vec<Arg>,
     /// Set for ACTION: the engine-function routine id.
     pub routine: Option<u16>,
-    /// Set for ACTION: `nwscript` name when the id is known.
+    /// Set for ACTION by the caller when it has a name; the reader leaves it `None`.
     pub routine_name: Option<&'static str>,
     /// Set for ACTION: how many arguments the call consumes.
     pub argc: Option<u8>,
@@ -189,7 +188,6 @@ fn read_instruction(data: &[u8], offset: usize, end: usize) -> Result<(Instructi
             let routine = take_u16(data, &mut pos, end)?;
             let argc = take_u8(data, &mut pos, end)?;
             ins.routine = Some(routine);
-            ins.routine_name = actions::action(crate::Game::K2, routine).map(|a| a.name);
             ins.argc = Some(argc);
             ins.args.push(Arg::Int(routine as i64));
             ins.args.push(Arg::Int(argc as i64));
@@ -384,7 +382,7 @@ mod tests {
             other => panic!("{other:?}"),
         }
         assert_eq!(n.instructions[1].op, "ACTION");
-        assert_eq!(n.instructions[1].routine_name, Some("GetObjectByTag"));
+        assert_eq!(n.instructions[1].routine_name, None);
         assert_eq!(n.instructions[1].argc, Some(2));
     }
 

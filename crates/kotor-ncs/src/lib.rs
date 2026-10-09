@@ -1,7 +1,6 @@
 //! NCS → NSS decompiler (DeNCS algorithm port).
 
 mod actions;
-mod actions_gen;
 mod ast;
 mod build;
 mod cfg;
@@ -17,6 +16,7 @@ mod split;
 mod stack;
 mod ty;
 
+pub use actions::{ActionSig, ActionTable, ParamSig};
 pub use ast::{BinOp, Block, ElseArm, Expr, Stmt, SwitchCase, UnaryOp};
 pub use build::{build_sub, BuildError};
 pub use cfg::{analyze, BlockEnd, Cfg};
@@ -24,7 +24,6 @@ pub use cleanup::{cleanup, VarTable};
 pub use decode::{read, sniff, write, Arg, Error as NcsError, Instruction, Ncs};
 pub use emit::{emit_program, format_float, EmitBody};
 pub use fallback::fallback_sub_body;
-pub use actions::{action, ActionSig, K1_ACTION_COUNT, ParamSig};
 pub use game::Game;
 pub use globals::{build_globals, GlobalTable, GlobalVar, GlobalsError};
 pub use names::{name_from_action, NameGen};
@@ -82,12 +81,14 @@ pub enum SubStatus {
 }
 
 /// Never panics. Never returns Err.
-pub fn decompile(ncs: &crate::Ncs, game: Game) -> Decompiled {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| decompile_inner(ncs, game)))
-        .unwrap_or_else(|_| fallback_decompile(ncs, "decompiler panic"))
+pub fn decompile(ncs: &crate::Ncs, game: Game, actions: &ActionTable) -> Decompiled {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        decompile_inner(ncs, game, actions)
+    }))
+    .unwrap_or_else(|_| fallback_decompile(ncs, "decompiler panic"))
 }
 
-fn decompile_inner(ncs: &crate::Ncs, game: Game) -> Decompiled {
+fn decompile_inner(ncs: &crate::Ncs, game: Game, actions: &ActionTable) -> Decompiled {
     use std::collections::HashMap;
 
     if ncs.instructions.is_empty() {
@@ -131,7 +132,7 @@ fn decompile_inner(ncs: &crate::Ncs, game: Game) -> Decompiled {
         },
         None => GlobalTable { vars: Vec::new() },
     };
-    let (protos, mut warnings) = infer_prototypes(&ncs.instructions, &program, &cfgs, game);
+    let (protos, mut warnings) = infer_prototypes(&ncs.instructions, &program, &cfgs, actions);
 
     let mut items = Vec::new();
     let mut reports = Vec::new();
@@ -172,7 +173,7 @@ fn decompile_inner(ncs: &crate::Ncs, game: Game) -> Decompiled {
             );
             continue;
         };
-        match build_sub(&ncs.instructions, &info, cfg, &globals, &protos, game) {
+        match build_sub(&ncs.instructions, &info, cfg, &globals, &protos, actions) {
             Ok((mut block, mut vars, sub_structs)) => {
                 cleanup::cleanup(&mut block, &mut vars);
                 match &mut structs {
@@ -326,16 +327,12 @@ mod tests {
 
     #[test]
     fn decompile_never_empty_and_never_panics() {
-        let d = decompile(&minimal_main_ncs(), Game::K1);
+        let d = decompile(&minimal_main_ncs(), Game::K1, &ActionTable::empty());
         assert!(!d.source.is_empty());
         assert!(d.source.contains("/*") || d.source.contains("void") || d.source.contains("RETN"));
     }
 
-    fn inst(
-        offset: u32,
-        op: &'static str,
-        args: Vec<crate::Arg>,
-    ) -> crate::Instruction {
+    fn inst(offset: u32, op: &'static str, args: Vec<crate::Arg>) -> crate::Instruction {
         crate::Instruction {
             offset,
             op,
@@ -363,7 +360,7 @@ mod tests {
 
     #[test]
     fn build_failure_falls_back_per_sub() {
-        let d = decompile(&ncs_broken_user_ok_main(), Game::K1);
+        let d = decompile(&ncs_broken_user_ok_main(), Game::K1, &ActionTable::empty());
         assert!(
             !d.complete,
             "complete={}; source=\n{}",
@@ -410,6 +407,7 @@ mod tests {
                 instructions: Vec::new(),
             },
             Game::K1,
+            &ActionTable::empty(),
         );
         assert!(!d.complete);
         assert_eq!(d.source.trim(), "/* kq: empty NCS */");

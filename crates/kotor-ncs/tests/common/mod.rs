@@ -2,7 +2,13 @@
 //!
 //! Offsets start at 13 (after the NCS header). Sizes come from `kotor-ncs-isa`.
 
-use kotor_ncs::{action, Arg, Game, Instruction};
+use kotor_ncs::{ActionTable, Arg, Instruction};
+
+/// Engine-function table for decompiler tests. kotor-ncs ships none.
+#[allow(dead_code)]
+pub fn actions() -> ActionTable {
+    ActionTable::empty()
+}
 
 #[derive(Clone, Debug)]
 pub enum AsmArg {
@@ -55,7 +61,6 @@ pub fn asm(lines: &[(&str, Vec<AsmArg>)]) -> Vec<Instruction> {
             if let Some(Arg::Int(id)) = ins.args.first() {
                 let id = *id as u16;
                 ins.routine = Some(id);
-                ins.routine_name = action(Game::K2, id).map(|a| a.name);
             }
             if let Some(Arg::Int(argc)) = ins.args.get(1) {
                 ins.argc = Some(*argc as u8);

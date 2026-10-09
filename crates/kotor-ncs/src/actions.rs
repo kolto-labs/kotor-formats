@@ -1,90 +1,172 @@
-use crate::actions_gen::ACTIONS_GEN;
 use crate::ty::Ty;
-use crate::Game;
 
-pub const K1_ACTION_COUNT: usize = 772;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// One engine-function parameter.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParamSig {
     pub ty: Ty,
-    pub default: Option<&'static str>,
+    pub default: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// One engine-function signature, indexed by its ACTION routine id.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActionSig {
-    pub name: &'static str,
+    pub name: String,
     pub ret: Ty,
-    pub params: &'static [ParamSig],
+    pub params: Vec<ParamSig>,
 }
 
-/// Full TSL-superset; missing ids are None.
-pub fn actions(game: Game) -> &'static [Option<ActionSig>] {
-    match game {
-        Game::K1 => &ACTIONS_GEN[..K1_ACTION_COUNT],
-        Game::K2 => &ACTIONS_GEN[..],
+/// Engine-function signatures supplied by the caller.
+///
+/// kotor-ncs ships no engine-function data. Build the table from the
+/// `nwscript.nss` of the install being decompiled, or from your own list.
+/// The position of a prototype is its ACTION routine id.
+#[derive(Clone, Debug, Default)]
+pub struct ActionTable {
+    actions: Vec<Option<ActionSig>>,
+}
+
+impl ActionTable {
+    /// A table with no functions. ACTION instructions fail to decompile.
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    /// A table from signatures indexed by routine id; `None` marks a gap.
+    pub fn new(actions: Vec<Option<ActionSig>>) -> Self {
+        Self { actions }
+    }
+
+    /// Parse the function prototypes of an `nwscript.nss` source.
+    ///
+    /// Comments are skipped. Constants and anything that is not a
+    /// function prototype are ignored.
+    pub fn from_nwscript(src: &str) -> Self {
+        let code = strip_comments(src);
+        let actions = code
+            .split(';')
+            .filter_map(parse_prototype)
+            .map(Some)
+            .collect();
+        Self { actions }
+    }
+
+    pub fn get(&self, id: u16) -> Option<&ActionSig> {
+        self.actions.get(id as usize).and_then(|s| s.as_ref())
+    }
+
+    pub fn len(&self) -> usize {
+        self.actions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.actions.is_empty()
     }
 }
 
-pub fn action(game: Game, id: u16) -> Option<&'static ActionSig> {
-    actions(game)
-        .get(id as usize)
-        .and_then(|slot| slot.as_ref())
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::actions::{action, K1_ACTION_COUNT};
-    use crate::ty::Ty;
-    use crate::Game;
-
-    #[test]
-    fn k1_prefix_ids_match_known_bindings() {
-        use crate::actions::{action, K1_ACTION_COUNT};
-        assert_eq!(K1_ACTION_COUNT, 772);
-        assert_eq!(action(Game::K1, 0).unwrap().name, "Random");
-        assert_eq!(action(Game::K1, 28).unwrap().name, "GetFacing");
-        assert_eq!(action(Game::K1, 28).unwrap().ret, Ty::Float);
-        assert_eq!(action(Game::K1, 6).unwrap().name, "AssignCommand");
-        assert!(matches!(
-            action(Game::K1, 6).unwrap().params[1].ty,
-            Ty::Action
-        ));
-        // K1 must not see TSL-only ids
-        assert!(action(Game::K1, 772).is_none());
-    }
-
-    #[test]
-    fn tsl_ids_de_ncs_got_wrong() {
-        assert_eq!(action(Game::K2, 771).unwrap().name, "GetItemComponent");
-        assert_eq!(
-            action(Game::K2, 772).unwrap().name,
-            "GetItemComponentPieceValue"
-        );
-        assert_eq!(action(Game::K2, 806).unwrap().name, "QueueMovie");
-    }
-
-    #[test]
-    fn k1_prefix_equals_tsl_prefix() {
-        for id in 0..K1_ACTION_COUNT {
-            let a = action(Game::K1, id as u16);
-            let b = action(Game::K2, id as u16);
-            assert_eq!(a.map(|s| s.name), b.map(|s| s.name));
+fn strip_comments(src: &str) -> String {
+    let b = src.as_bytes();
+    let mut out = String::with_capacity(src.len());
+    let (mut i, mut in_str) = (0, false);
+    while i < b.len() {
+        if in_str {
+            let c = src[i..].chars().next().unwrap();
+            out.push(c);
+            if c == '\\' && i + 1 < b.len() {
+                let n = src[i + 1..].chars().next().unwrap();
+                out.push(n);
+                i += 1 + n.len_utf8();
+                continue;
+            }
+            if c == '"' {
+                in_str = false;
+            }
+            i += c.len_utf8();
+        } else if b[i] == b'"' {
+            in_str = true;
+            out.push('"');
+            i += 1;
+        } else if b[i..].starts_with(b"//") {
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+        } else if b[i..].starts_with(b"/*") {
+            i += 2;
+            while i < b.len() && !b[i..].starts_with(b"*/") {
+                i += 1;
+            }
+            i = (i + 2).min(b.len());
+            out.push(' ');
+        } else {
+            let c = src[i..].chars().next().unwrap();
+            out.push(c);
+            i += c.len_utf8();
         }
     }
+    out
+}
 
-    #[test]
-    fn action_typed_params() {
-        assert!(matches!(
-            action(Game::K1, 6).unwrap().params[1].ty,
-            Ty::Action
-        ));
-        assert!(matches!(
-            action(Game::K1, 7).unwrap().params[1].ty,
-            Ty::Action
-        ));
-        assert!(matches!(
-            action(Game::K1, 294).unwrap().params[0].ty,
-            Ty::Action
-        ));
+fn parse_ty(word: &str) -> Option<Ty> {
+    Some(match word {
+        "void" => Ty::Void,
+        "int" => Ty::Int,
+        "float" => Ty::Float,
+        "string" => Ty::Str,
+        "object" => Ty::Object,
+        "effect" => Ty::Effect,
+        "event" => Ty::Event,
+        "location" => Ty::Location,
+        "talent" => Ty::Talent,
+        "vector" => Ty::Vector,
+        "action" => Ty::Action,
+        _ => return None,
+    })
+}
+
+fn parse_prototype(stmt: &str) -> Option<ActionSig> {
+    let stmt = stmt.trim();
+    let open = stmt.find('(')?;
+    let close = stmt.rfind(')')?;
+    let mut head = stmt[..open].split_whitespace();
+    let ret = parse_ty(head.next()?)?;
+    let name = head.next()?;
+    if head.next().is_some() || !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return None;
     }
+    let mut params = Vec::new();
+    for raw in split_params(&stmt[open + 1..close]) {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            continue;
+        }
+        let (decl, default) = match raw.split_once('=') {
+            Some((d, v)) => (d, Some(v.trim().to_string())),
+            None => (raw, None),
+        };
+        let ty = parse_ty(decl.split_whitespace().next()?)?;
+        params.push(ParamSig { ty, default });
+    }
+    Some(ActionSig {
+        name: name.to_string(),
+        ret,
+        params,
+    })
+}
+
+/// Split on commas outside brackets and string literals.
+fn split_params(s: &str) -> Vec<&str> {
+    let (mut out, mut depth, mut in_str, mut start) = (Vec::new(), 0i32, false, 0);
+    for (i, c) in s.char_indices() {
+        match c {
+            '"' => in_str = !in_str,
+            '[' | '(' if !in_str => depth += 1,
+            ']' | ')' if !in_str => depth -= 1,
+            ',' if !in_str && depth == 0 => {
+                out.push(&s[start..i]);
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&s[start..]);
+    out
 }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use common::{asm, AsmArg};
 use kotor_ncs::{
-    analyze, infer_prototypes, split, Arg, Cfg, Game, Instruction, SplitProgram, SubId, SubKind,
+    analyze, infer_prototypes, split, Arg, Cfg, Instruction, SplitProgram, SubId, SubKind,
     Ty,
 };
 
@@ -31,7 +31,7 @@ fn cfgs_for(ins: &[Instruction], program: &SplitProgram) -> HashMap<SubId, Cfg> 
 fn infer(ins: &[Instruction]) -> (HashMap<SubId, kotor_ncs::SubInfo>, Vec<kotor_ncs::Warning>) {
     let program = split(ins).unwrap();
     let cfgs = cfgs_for(ins, &program);
-    infer_prototypes(ins, &program, &cfgs, Game::K1)
+    infer_prototypes(ins, &program, &cfgs, &common::actions())
 }
 
 #[test]

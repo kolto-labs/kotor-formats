@@ -4,14 +4,14 @@ use std::collections::HashMap;
 
 use crate::{Arg, Instruction};
 
-use crate::actions::action;
+use crate::actions::ActionTable;
 use crate::ast::{BinOp, Block, ElseArm, Expr, Stmt, SwitchCase, UnaryOp};
 use crate::cfg::Cfg;
 use crate::cleanup::VarTable;
 use crate::globals::GlobalTable;
 use crate::stack::{stack_offset_to_pos, stack_size_to_pos, Const, Var, VarId, VarKind};
 use crate::ty::{StructTable, Ty};
-use crate::{Game, SubId, SubInfo};
+use crate::{SubId, SubInfo};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BuildError {
@@ -45,7 +45,7 @@ struct Builder<'a> {
     cfg: &'a Cfg,
     globals: &'a GlobalTable,
     protos: &'a HashMap<SubId, SubInfo>,
-    game: Game,
+    actions: &'a ActionTable,
     stack: Vec<Value>,
     next_var: u32,
     vars: VarTable,
@@ -79,14 +79,14 @@ pub fn build_sub(
     cfg: &Cfg,
     globals: &GlobalTable,
     protos: &HashMap<SubId, SubInfo>,
-    game: Game,
+    actions: &ActionTable,
 ) -> Result<(Block, VarTable, StructTable), BuildError> {
     let mut builder = Builder {
         ins,
         cfg,
         globals,
         protos,
-        game,
+        actions,
         stack: Vec::new(),
         next_var: 0,
         vars: VarTable::new(),
@@ -507,7 +507,7 @@ impl Builder<'_> {
     fn call_action(&mut self, inst: &Instruction, block: &mut Block) -> Result<(), BuildError> {
         let id = inst.routine.unwrap_or(arg_i32(inst, 0)? as u16);
         let argc = inst.argc.unwrap_or(arg_i32(inst, 1)? as u8) as usize;
-        let sig = action(self.game, id).ok_or_else(|| self.bad_operand(inst))?;
+        let sig = self.actions.get(id).ok_or_else(|| self.bad_operand(inst))?;
         let mut args = Vec::with_capacity(argc);
         for idx in 0..argc {
             let is_action = sig.params.get(idx).is_some_and(|p| p.ty == Ty::Action);
@@ -956,7 +956,7 @@ fn binary_op(op: &str) -> Option<BinOp> {
 mod tests {
     use super::*;
     use crate::globals::GlobalTable;
-    use crate::{analyze, infer_prototypes, split, Game, SubId};
+    use crate::{analyze, infer_prototypes, split, ActionTable, SubId};
     use crate::{Arg, Instruction};
     use std::collections::HashMap;
 
@@ -999,10 +999,10 @@ mod tests {
         let mut cfgs = HashMap::new();
         cfgs.insert(SubId::Main, cfg);
         let globals = GlobalTable { vars: Vec::new() };
-        let (protos, _) = infer_prototypes(ins, &program, &cfgs, Game::K1);
+        let (protos, _) = infer_prototypes(ins, &program, &cfgs, &ActionTable::empty());
         let info = protos.get(&SubId::Main).expect("main proto");
         let cfg = cfgs.get(&SubId::Main).expect("main cfg");
-        build_sub(ins, info, cfg, &globals, &protos, Game::K1).unwrap()
+        build_sub(ins, info, cfg, &globals, &protos, &ActionTable::empty()).unwrap()
     }
 
     #[test]
