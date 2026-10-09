@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/kolto-labs/kotor-formats/compare/kotor-diff-v0.1.0...kotor-diff-v0.2.0) (2026-10-09)
+
+
+### Features
+
+* add kotor-diff, the comparison both tools were keeping privately ([#1](https://github.com/kolto-labs/kotor-formats/issues/1)) ([f1799c6](https://github.com/kolto-labs/kotor-formats/commit/f1799c6e4911a4e8514b03ec8a06d485849088ba))
+
+
+### Bug Fixes
+
+* give each crate a literal version so release-please can bump it ([#2](https://github.com/kolto-labs/kotor-formats/issues/2)) ([79a6ca4](https://github.com/kolto-labs/kotor-formats/commit/79a6ca447e6585c57d63aff4cf5e26e30bc75cbe))
+
 ## [0.2.2](https://github.com/kolto-labs/kotor-formats/compare/kotor-diff-v0.2.1...kotor-diff-v0.2.2) (2026-08-31)
 
 
