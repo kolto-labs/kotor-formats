@@ -7,7 +7,6 @@ use crate::names::NameGen;
 use crate::split::SubRange;
 use crate::stack::Const;
 use crate::ty::Ty;
-use crate::Game;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlobalTable {
@@ -34,12 +33,7 @@ pub enum GlobalsError {
 /// Simple `RSADDx; CONSTx; CPDOWNSP; MOVSP` inits become `Some(Expr::Const)`.
 /// Failed init recovery still yields typed names with `init: None`.
 /// `Err` only when no `RSADDx` is recoverable at all.
-pub fn build_globals(
-    ins: &[Instruction],
-    globals: &SubRange,
-    game: Game,
-) -> Result<GlobalTable, GlobalsError> {
-    let _ = game;
+pub fn build_globals(ins: &[Instruction], globals: &SubRange) -> Result<GlobalTable, GlobalsError> {
     let slice = match ins.get(globals.range.clone()) {
         Some(s) => s,
         None => return Err(GlobalsError::NoRecoverableGlobals),

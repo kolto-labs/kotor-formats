@@ -2,7 +2,39 @@
 //!
 //! Offsets start at 13 (after the NCS header). Sizes come from `kotor-ncs-isa`.
 
-use kotor_ncs::{action, Arg, Game, Instruction};
+use kotor_ncs::{ActionSig, ActionTable, Arg, Instruction};
+
+/// The engine functions these tests call, at their K1 ids. The decompiler
+/// takes the full table from a game's own `nwscript.nss`.
+#[allow(dead_code)]
+pub fn actions() -> ActionTable {
+    let mut table = ActionTable::default();
+    for (id, prototype) in [
+        (4, "void PrintInteger(int nInteger);"),
+        (6, "void AssignCommand(object oTarget, action aAction);"),
+        (
+            22,
+            "void ActionMoveToObject(object oTarget, int bRun, float fRange);",
+        ),
+        (37, "void ActionAttack(object oTarget, int bPassive);"),
+        (42, "int GetIsObjectValid(object oObject);"),
+        (166, "int GetHitDice(object oCreature);"),
+        (
+            229,
+            "object GetNearestObjectByTag(string sTag, object oTarget, int nNth);",
+        ),
+        (
+            412,
+            "void ChangeToStandardFaction(object oCreature, int nFaction);",
+        ),
+        (548, "object GetFirstPC();"),
+        (580, "int GetGlobalNumber(string sIdentifier);"),
+        (581, "void SetGlobalNumber(string sIdentifier, int nValue);"),
+    ] {
+        table.insert(id, ActionSig::parse(prototype).unwrap());
+    }
+    table
+}
 
 #[derive(Clone, Debug)]
 pub enum AsmArg {
@@ -16,6 +48,7 @@ pub enum AsmArg {
 
 /// Build instructions with automatic absolute offsets starting at 13.
 pub fn asm(lines: &[(&str, Vec<AsmArg>)]) -> Vec<Instruction> {
+    let table = actions();
     let mut offset = 13u32;
     let mut out = Vec::with_capacity(lines.len());
     for (op, args) in lines {
@@ -55,7 +88,7 @@ pub fn asm(lines: &[(&str, Vec<AsmArg>)]) -> Vec<Instruction> {
             if let Some(Arg::Int(id)) = ins.args.first() {
                 let id = *id as u16;
                 ins.routine = Some(id);
-                ins.routine_name = action(Game::K2, id).map(|a| a.name);
+                ins.routine_name = table.name(id).map(str::to_string);
             }
             if let Some(Arg::Int(argc)) = ins.args.get(1) {
                 ins.argc = Some(*argc as u8);

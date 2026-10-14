@@ -5,12 +5,12 @@ use std::ops::Range;
 
 use crate::{Arg, Instruction};
 
-use crate::actions::action;
+use crate::actions::ActionTable;
 use crate::cfg::Cfg;
 use crate::split::{SplitProgram, SubKind, SubRange};
 use crate::stack::{stack_offset_to_pos, stack_size_to_pos};
 use crate::ty::Ty;
-use crate::{Game, Severity, SubId, Warning};
+use crate::{Severity, SubId, Warning};
 
 const MAX_PASSES: usize = 3;
 
@@ -31,7 +31,7 @@ pub fn infer_prototypes(
     ins: &[Instruction],
     split: &SplitProgram,
     cfgs: &HashMap<SubId, Cfg>,
-    game: Game,
+    actions: &ActionTable,
 ) -> (HashMap<SubId, SubInfo>, Vec<Warning>) {
     let subs = collect_subs(split);
     let by_pos = start_pos_map(&subs);
@@ -59,7 +59,7 @@ pub fn infer_prototypes(
                     &by_pos,
                     &infos,
                     site_est.get(&id).copied().unwrap_or_default(),
-                    game,
+                    actions,
                     &mut warnings,
                 );
                 changed |= merge_info(id, next, &mut infos, &mut warnings);
@@ -309,7 +309,7 @@ fn infer_one(
     by_pos: &HashMap<u32, SubId>,
     known: &HashMap<SubId, SubInfo>,
     sites: CallSiteEstimate,
-    game: Game,
+    actions: &ActionTable,
     warnings: &mut Vec<Warning>,
 ) -> SubInfo {
     let mut walk = Walk {
@@ -341,7 +341,7 @@ fn infer_one(
 
     while let Some(i) = q.pop_front() {
         let mut stack = stack_in.get(&i).cloned().unwrap_or_default();
-        apply(ins, i, &mut stack, &mut walk, by_pos, known, game);
+        apply(ins, i, &mut stack, &mut walk, by_pos, known, actions);
 
         let succs: Vec<usize> = if let Some(cfg) = cfg {
             cfg.succ.get(i).cloned().unwrap_or_default()
@@ -417,7 +417,7 @@ fn apply(
     walk: &mut Walk,
     by_pos: &HashMap<u32, SubId>,
     known: &HashMap<SubId, SubInfo>,
-    game: Game,
+    actions: &ActionTable,
 ) {
     let inst = &ins[i];
     if let Some(effect) = typed_stack_effect(inst) {
@@ -494,7 +494,7 @@ fn apply(
                 push_return_slots(stack, info.ret, info.ret_slots);
             }
         }
-        "ACTION" => apply_action(inst, stack, walk, game),
+        "ACTION" => apply_action(inst, stack, walk, actions),
         "JZ" | "JNZ" => {
             pop_n(stack, 1);
         }
@@ -577,10 +577,10 @@ fn apply_typed_stack_effect(stack: &mut Vec<Slot>, effect: TypedStackEffect) {
     }
 }
 
-fn apply_action(inst: &Instruction, stack: &mut Vec<Slot>, walk: &mut Walk, game: Game) {
+fn apply_action(inst: &Instruction, stack: &mut Vec<Slot>, walk: &mut Walk, actions: &ActionTable) {
     let id = inst.routine.unwrap_or(arg_int(inst, 0) as u16);
     let argc = inst.argc.unwrap_or(arg_int(inst, 1) as u8);
-    let (ret_ty, ret_slots) = match action(game, id) {
+    let (ret_ty, ret_slots) = match actions.get(id) {
         Some(sig) => {
             let mut slots = 0usize;
             let mut arg_tys = Vec::new();

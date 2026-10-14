@@ -4,7 +4,7 @@ use crate::{Arg, Instruction, Ncs};
 
 pub fn format_ins(ins: &Instruction) -> String {
     let mut s = format!("{:5}  {}", ins.offset, ins.op);
-    if let Some(name) = ins.routine_name {
+    if let Some(name) = &ins.routine_name {
         s.push(' ');
         s.push_str(name);
         if let Some(argc) = ins.argc {

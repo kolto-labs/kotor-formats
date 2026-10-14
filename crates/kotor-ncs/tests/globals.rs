@@ -3,9 +3,7 @@
 mod common;
 
 use common::{asm, AsmArg::*};
-use kotor_ncs::{
-    build_globals, split, Arg, Const, Expr, Game, GlobalsError, Instruction, SubKind, Ty,
-};
+use kotor_ncs::{build_globals, split, Arg, Const, Expr, GlobalsError, Instruction, SubKind, Ty};
 
 fn jump(ins: &mut [Instruction], from: usize, to: usize) {
     ins[from].args[0] = Arg::Jump(ins[to].offset);
@@ -39,7 +37,7 @@ fn globals_two_ints() {
     let range = program.globals.expect("globals sub");
     assert_eq!(range.kind, SubKind::Globals);
 
-    let g = build_globals(&ins, &range, Game::K1).unwrap();
+    let g = build_globals(&ins, &range).unwrap();
     assert_eq!(g.vars[0].name, "intGLOB_1");
     assert_eq!(g.vars[1].name, "intGLOB_2");
     assert_eq!(g.vars[0].ty, Ty::Int);
@@ -67,7 +65,7 @@ fn globals_bare_rsadd_typed_without_init() {
 
     let program = split(&ins).unwrap();
     let range = program.globals.expect("globals sub");
-    let g = build_globals(&ins, &range, Game::K1).unwrap();
+    let g = build_globals(&ins, &range).unwrap();
     assert_eq!(g.vars.len(), 2);
     assert_eq!(g.vars[0].name, "intGLOB_1");
     assert_eq!(g.vars[1].name, "floatGLOB_1");
@@ -92,7 +90,7 @@ fn globals_no_rsadd_is_error() {
     let program = split(&ins).unwrap();
     let range = program.globals.expect("globals sub");
     assert_eq!(
-        build_globals(&ins, &range, Game::K1),
+        build_globals(&ins, &range),
         Err(GlobalsError::NoRecoverableGlobals)
     );
 }
