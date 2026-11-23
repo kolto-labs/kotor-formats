@@ -4,7 +4,6 @@ description = "Instruction set definitions for KotOR/Odyssey NCS compiled script
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
 repository.workspace = true
 
 # Data only: no dependencies, so a compiler backend can take this without

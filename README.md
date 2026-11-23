@@ -81,7 +81,3 @@ years, and it is preserved deliberately.
 
 Early. The API is not stable yet, and `kotor-formats` is not published to
 crates.io — depend on it by git tag or path.
-
-## License
-
-MIT. See [LICENSE](LICENSE).

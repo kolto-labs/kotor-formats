@@ -69,7 +69,3 @@ Add the JSON layer:
 ```toml
 kotor-diff = { git = "...", tag = "...", features = ["json"] }
 ```
-
-## License
-
-MIT. See the [repository root](../../LICENSE).
